@@ -1,0 +1,9 @@
+{
+	"go.testEnvVars": {
+		"GOOS": "js",
+		"GOARCH": "wasm",
+	},
+	"go.testFlags": [
+		"-exec=/usr/local/go/lib/wasm/go_js_wasm_exec"
+	]
+}
