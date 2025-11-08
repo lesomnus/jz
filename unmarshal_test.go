@@ -54,7 +54,7 @@ func TestUnmarshal(t *testing.T) {
 		require.NotNil(t, v.Foo)
 		require.Equal(t, "bar", *v.Foo)
 	})
-	t.Run("any", func(t *testing.T) {
+	t.Run("any with scalar", func(t *testing.T) {
 		var v any = float64(42)
 		DoTestV(t, v)
 	})
@@ -62,8 +62,12 @@ func TestUnmarshal(t *testing.T) {
 		var v any = []any{"foo", 3.14, true, false}
 		DoTestV(t, v)
 	})
-	t.Run("slice with zero", func(t *testing.T) {
-		DoTest(t, []string{"foo", "bar", "baz"}, []any{"foo", "bar", "baz"})
+	t.Run("any with map", func(t *testing.T) {
+		var v any = map[string]any{
+			"foo": "bar",
+			"baz": float64(42),
+		}
+		DoTestV(t, v)
 	})
 	t.Run("slice of any", func(t *testing.T) {
 		var vs = []any{"foo", 3.14, true, false}

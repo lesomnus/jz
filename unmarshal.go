@@ -72,7 +72,7 @@ func unmarshal(data js.Value, v reflect.Value) error {
 
 			} else {
 				// JS Object -> map[string]any
-				ks := js.Global().Get("Object").Call("keys", v)
+				ks := js.Global().Get("Object").Call("keys", data)
 
 				l := ks.Length()
 				c := map[string]any{}
@@ -89,7 +89,7 @@ func unmarshal(data js.Value, v reflect.Value) error {
 
 					w.SetMapIndex(reflect.ValueOf(k), dst)
 				}
-				v.Send(w)
+				v.Set(w)
 			}
 		}
 
