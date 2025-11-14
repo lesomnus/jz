@@ -106,7 +106,10 @@ func unmarshal(data js.Value, v reflect.Value) error {
 	}
 
 	switch t {
-	case js.TypeNull, js.TypeUndefined:
+	case js.TypeUndefined:
+		// Noop.
+
+	case js.TypeNull:
 		v.Set(reflect.Zero(v.Type()))
 
 	case js.TypeNumber:
@@ -122,12 +125,17 @@ func unmarshal(data js.Value, v reflect.Value) error {
 			reflect.Uint8,
 			reflect.Uint16,
 			reflect.Uint32,
-			reflect.Uint64:
+			reflect.Uint64,
+			reflect.Uintptr:
 			v.SetUint(uint64(data.Int()))
 
 		case reflect.Float32,
 			reflect.Float64:
 			v.SetFloat(data.Float())
+
+		case reflect.Complex64,
+			reflect.Complex128:
+			v.SetComplex(complex(data.Float(), 0))
 
 		default:
 			return invalid_unmarshal_err()
@@ -153,6 +161,24 @@ func unmarshal(data js.Value, v reflect.Value) error {
 
 	case js.TypeObject:
 		switch k {
+		case reflect.Map:
+			// JS Object -> map[string]any
+			ks := js.Global().Get("Object").Call("keys", data)
+
+			l := ks.Length()
+			for i := range l {
+				k := ks.Index(i).String()
+				var v_ any
+
+				src := data.Get(k)
+				dst := reflect.ValueOf(&v_).Elem()
+				if err := unmarshal(src, dst); err != nil {
+					return fmt.Errorf(".%s: %w", k, err)
+				}
+
+				v.SetMapIndex(reflect.ValueOf(k), dst)
+			}
+
 		case reflect.Struct:
 			for i := range v.NumField() {
 				f := v.Field(i)
@@ -191,7 +217,7 @@ func unmarshal(data js.Value, v reflect.Value) error {
 				data = js.Global().Get("Uint8Array").New(data)
 				fallthrough
 			case data.InstanceOf(js.Global().Get("Uint8Array")):
-				switch v.Elem().Kind() {
+				switch v.Type().Elem().Kind() {
 				case reflect.Uint8:
 					// fast path for []byte?
 					c := unmarshalByteArray(data)

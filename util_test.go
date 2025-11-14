@@ -33,7 +33,10 @@ func TestStringify(t *testing.T) {
 		require.Equal(t, "[Function: parseInt]", s)
 	})
 	t.Run("Object", func(t *testing.T) {
-		v := js.ValueOf(map[string]any{"foo": "bar", "baz": 42})
+		v := js.ValueOf(map[string]any{})
+		v.Set("foo", "bar")
+		v.Set("baz", 42)
+
 		s := jz.Stringify(v)
 		require.Equal(t, `{"foo":"bar","baz":42}`, s)
 	})
