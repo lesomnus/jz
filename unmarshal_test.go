@@ -73,6 +73,18 @@ func TestUnmarshal(t *testing.T) {
 		var vs = []any{"foo", 3.14, true, false}
 		DoTestV(t, vs)
 	})
+	t.Run("byte slice", func(t *testing.T) {
+		var v = []byte{1, 2, 3, 4, 5}
+		DoTest(t, v, []any{1, 2, 3, 4, 5})
+	})
+	t.Run("byte slice from Uint8Array", func(t *testing.T) {
+		var v []byte
+		jv := js.Global().Get("Uint8Array").Call("from", []any{1, 2, 3, 4, 5})
+
+		err := jz.Unmarshal(jv, &v)
+		require.NoError(t, err)
+		require.Equal(t, []byte{1, 2, 3, 4, 5}, v)
+	})
 	t.Run("struct", func(t *testing.T) {
 		type A struct {
 			Int    int

@@ -9,5 +9,5 @@ type RejectedError struct {
 }
 
 func (e RejectedError) Error() string {
-	return Stringify(e)
+	return Stringify(e.Value)
 }

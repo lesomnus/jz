@@ -56,7 +56,16 @@ func unmarshal(data js.Value, v reflect.Value) error {
 		case js.TypeBoolean:
 			v.Set(reflect.ValueOf(data.Bool()))
 		case js.TypeObject:
-			if js.Global().Get("Array").Call("isArray", data).Truthy() {
+			switch {
+			case data.InstanceOf(js.Global().Get("ArrayBuffer")):
+				data = js.Global().Get("Uint8Array").New(data)
+
+				fallthrough
+			case data.InstanceOf(js.Global().Get("Uint8Array")):
+				c := unmarshalByteArray(data)
+				v.Set(reflect.ValueOf(c))
+
+			case js.Global().Get("Array").Call("isArray", data).Truthy():
 				// JS Array -> []any
 				l := data.Length()
 				c := make([]any, l)
@@ -70,7 +79,7 @@ func unmarshal(data js.Value, v reflect.Value) error {
 				}
 				v.Set(w)
 
-			} else {
+			default:
 				// JS Object -> map[string]any
 				ks := js.Global().Get("Object").Call("keys", data)
 
@@ -170,10 +179,6 @@ func unmarshal(data js.Value, v reflect.Value) error {
 			}
 
 		case reflect.Array, reflect.Slice:
-			if !js.Global().Get("Array").Call("isArray", data).Truthy() {
-				return fmt.Errorf("invalid unmarshal from non-array object to %q", k.String())
-			}
-
 			l := data.Length()
 			if k == reflect.Array {
 				l = min(l, v.Len())
@@ -181,12 +186,55 @@ func unmarshal(data js.Value, v reflect.Value) error {
 				v.Set(reflect.MakeSlice(v.Type(), l, l))
 			}
 
-			for i := range l {
-				src := data.Index(i)
-				dst := v.Index(i)
-				if err := unmarshal(src, dst); err != nil {
-					return fmt.Errorf(".%s[%d]: %w", v.Type().Name(), i, err)
+			switch {
+			case data.InstanceOf(js.Global().Get("ArrayBuffer")):
+				data = js.Global().Get("Uint8Array").New(data)
+				fallthrough
+			case data.InstanceOf(js.Global().Get("Uint8Array")):
+				switch v.Elem().Kind() {
+				case reflect.Uint8:
+					// fast path for []byte?
+					c := unmarshalByteArray(data)
+					v.SetBytes(c)
+					return nil
+
+				case reflect.Int,
+					reflect.Int8,
+					reflect.Int16,
+					reflect.Int32,
+					reflect.Int64:
+					for i := range l {
+						v.Index(i).SetInt(int64(data.Index(i).Int()))
+					}
+
+				case reflect.Uint,
+					reflect.Uint16,
+					reflect.Uint32,
+					reflect.Uint64:
+					for i := range l {
+						v.Index(i).SetUint(uint64(data.Index(i).Int()))
+					}
+
+				case reflect.Float32,
+					reflect.Float64:
+					for i := range l {
+						v.Index(i).SetFloat(data.Index(i).Float())
+					}
 				}
+
+				// TODO: ???
+				fallthrough
+			case js.Global().Get("Array").Call("isArray", data).Truthy():
+				for i := range l {
+					src := data.Index(i)
+					dst := v.Index(i)
+					if err := unmarshal(src, dst); err != nil {
+						return fmt.Errorf(".%s[%d]: %w", v.Type().Name(), i, err)
+					}
+				}
+
+			default:
+				return fmt.Errorf("invalid unmarshal from non-array object to %q", k.String())
 			}
 
 		default:
@@ -210,4 +258,15 @@ func toLowerCamel(s string) string {
 	r := []rune(s)
 	r[0] = unicode.ToLower(r[0])
 	return string(r)
+}
+
+func unmarshalByteArray(data js.Value) []byte {
+	l := data.Length()
+	c := make([]byte, l)
+	for i := range l {
+		src := data.Index(i)
+		c[i] = byte(src.Int())
+	}
+
+	return c
 }
