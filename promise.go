@@ -10,6 +10,12 @@ import (
 // Promise creates a JavaScript Promise from a Go function.
 // The function f should return a result value and an error.
 // If the error is not nil, the Promise will be rejected.
+//
+// Note: Unlike a JavaScript `new Promise((resolve, reject) => { ... })` executor,
+// the function you pass is not run synchronously during construction.
+// It is deferred and executed in a separate goroutine after the current call returns.
+// Therefore, any side effects or panics inside the function will not be observable
+// in the immediate calling context.
 func Promise(f func() (any, any)) js.Value {
 	return globalScope.Promise(f)
 }
