@@ -2,7 +2,10 @@
 
 package jz
 
-import "syscall/js"
+import (
+	"context"
+	"syscall/js"
+)
 
 func Promise(f func() (any, any)) js.Value {
 	return globalScope.Promise(f)
@@ -10,6 +13,10 @@ func Promise(f func() (any, any)) js.Value {
 
 func Await(p js.Value) (js.Value, error) {
 	return globalScope.Await(p)
+}
+
+func AwaitContext(ctx context.Context, p js.Value) (js.Value, error) {
+	return globalScope.AwaitContext(ctx, p)
 }
 
 func Resolve(v js.Value) js.Value {
