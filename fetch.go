@@ -67,13 +67,31 @@ func (t FetchTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 		Status:     http.StatusText(js_res.Get("status").Int()),
 		StatusCode: js_res.Get("status").Int(),
 	}
-	if js_body, err := AwaitContext(ctx, js_res.Call("bytes")); err != nil {
-		return nil, fmt.Errorf("res.bytes: %w", err)
-	} else {
-		body := BytesToGo(js_body)
+
+	js_body := js_res.Get("body")
+	switch {
+	case js_body.IsNull():
+		// There is no body.
+	case js_body.InstanceOf(js.Global().Get("ReadableStream")):
+		res.Body, err = NewReader(js_body)
+		if err == nil {
+			break
+		}
+
+		// Fallback to `bytes`.
+		fallthrough
+	default:
+		data, err := AwaitContext(ctx, js_res.Call("bytes"))
+		if err != nil {
+			return nil, fmt.Errorf("res.bytes: %w", err)
+		}
+
+		body := BytesToGo(data)
 		res.Body = io.NopCloser(bytes.NewReader(body))
 		res.ContentLength = int64(len(body))
 	}
+
+	// Prase header.
 	{
 		h := http.Header{}
 		it := js_res.Get("headers").Call("entries")
