@@ -300,14 +300,16 @@ func TestUnmarshal(t *testing.T) {
 		require.ErrorContains(t, err, fmt.Sprintf("from %q to %q", "string", "int"))
 	})
 	t.Run("Array of mixed types -> []js.Value", func(t *testing.T) {
+		x := require.New(t)
+
 		v := []js.Value{}
 		err := jz.Unmarshal(js.ValueOf([]any{42, "foo"}), &v)
-		require.NoError(t, err)
-		require.Len(t, v, 2)
-		require.Equal(t, v[0].Type(), js.TypeNumber)
-		require.Equal(t, v[0].Int(), 42)
-		require.Equal(t, v[1].Type(), js.TypeString)
-		require.Equal(t, v[1].String(), "foo")
+		x.NoError(err)
+		x.Len(v, 2)
+		x.Equal(js.TypeNumber, v[0].Type())
+		x.Equal(42, v[0].Int())
+		x.Equal(js.TypeString, v[1].Type())
+		x.Equal("foo", v[1].String())
 	})
 	t.Run("Uint8Array -> []number", func(t *testing.T) {
 		jv := js.Global().Get("Uint8Array").Call("from", []any{1, 2, 3, 4, 5})
@@ -366,16 +368,18 @@ func TestUnmarshal(t *testing.T) {
 		require.ErrorContains(t, err, fmt.Sprintf("from %q to %q", "number", "string"))
 	})
 	t.Run("Object of mixed type -> map[string]js.Value", func(t *testing.T) {
+		x := require.New(t)
+
 		v := map[string]js.Value{}
 		err := jz.Unmarshal(js.ValueOf(map[string]any{"foo": "bar", "baz": float64(42)}), &v)
-		require.NoError(t, err)
-		require.Len(t, v, 2)
-		require.Contains(t, v, "foo")
-		require.Equal(t, v["foo"].Type(), js.TypeString)
-		require.Equal(t, v["foo"].String(), "bar")
-		require.Contains(t, v, "baz")
-		require.Equal(t, v["baz"].Type(), js.TypeNumber)
-		require.Equal(t, v["baz"].Float(), float64(42))
+		x.NoError(err)
+		x.Len(v, 2)
+		x.Contains(v, "foo")
+		x.Equal(js.TypeString, v["foo"].Type())
+		x.Equal("bar", v["foo"].String())
+		x.Contains(v, "baz")
+		x.Equal(js.TypeNumber, v["baz"].Type())
+		x.Equal(float64(42), v["baz"].Float())
 	})
 	t.Run("Object -> struct", func(t *testing.T) {
 		type A struct {
@@ -398,6 +402,8 @@ func TestUnmarshal(t *testing.T) {
 		)
 	})
 	t.Run("Object -> struct with js.Value", func(t *testing.T) {
+		x := require.New(t)
+
 		type A struct {
 			Bool   js.Value
 			Int    js.Value
@@ -413,13 +419,13 @@ func TestUnmarshal(t *testing.T) {
 			}),
 			&v,
 		)
-		require.NoError(t, err)
-		require.Equal(t, v.Bool.Type(), js.TypeBoolean)
-		require.Equal(t, v.Bool.Bool(), true)
-		require.Equal(t, v.Int.Type(), js.TypeNumber)
-		require.Equal(t, v.Int.Int(), 42)
-		require.Equal(t, v.String.Type(), js.TypeString)
-		require.Equal(t, v.String.String(), "Le Big Mac")
+		x.NoError(err)
+		x.Equal(js.TypeBoolean, v.Bool.Type())
+		x.Equal(true, v.Bool.Bool())
+		x.Equal(js.TypeNumber, v.Int.Type())
+		x.Equal(42, v.Int.Int())
+		x.Equal(js.TypeString, v.String.Type())
+		x.Equal("Le Big Mac", v.String.String())
 	})
 	t.Run("Object -> nested struct", func(t *testing.T) {
 		type A struct {
