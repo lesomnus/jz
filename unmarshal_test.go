@@ -212,6 +212,13 @@ func TestUnmarshal(t *testing.T) {
 		DoTestType[map[string]any, byte](t, false)
 		DoTestType[map[string]any, rune](t, false)
 	})
+	t.Run("js.Value -> js.Value", func(t *testing.T) {
+		jv := js.ValueOf(js.Global().Get("Object").New())
+		var v js.Value
+		err := jz.Unmarshal(jv, &v)
+		require.NoError(t, err)
+		require.True(t, jv.Equal(v))
+	})
 	t.Run("bool", func(t *testing.T) {
 		DoTestV[any](t, false)
 		DoTestV[any](t, true)
@@ -292,6 +299,16 @@ func TestUnmarshal(t *testing.T) {
 		require.ErrorContains(t, err, ".[1]")
 		require.ErrorContains(t, err, fmt.Sprintf("from %q to %q", "string", "int"))
 	})
+	t.Run("Array of mixed types -> []js.Value", func(t *testing.T) {
+		v := []js.Value{}
+		err := jz.Unmarshal(js.ValueOf([]any{42, "foo"}), &v)
+		require.NoError(t, err)
+		require.Len(t, v, 2)
+		require.Equal(t, v[0].Type(), js.TypeNumber)
+		require.Equal(t, v[0].Int(), 42)
+		require.Equal(t, v[1].Type(), js.TypeString)
+		require.Equal(t, v[1].String(), "foo")
+	})
 	t.Run("Uint8Array -> []number", func(t *testing.T) {
 		jv := js.Global().Get("Uint8Array").Call("from", []any{1, 2, 3, 4, 5})
 
@@ -348,6 +365,18 @@ func TestUnmarshal(t *testing.T) {
 		require.ErrorContains(t, err, ".baz")
 		require.ErrorContains(t, err, fmt.Sprintf("from %q to %q", "number", "string"))
 	})
+	t.Run("Object of mixed type -> map[string]js.Value", func(t *testing.T) {
+		v := map[string]js.Value{}
+		err := jz.Unmarshal(js.ValueOf(map[string]any{"foo": "bar", "baz": float64(42)}), &v)
+		require.NoError(t, err)
+		require.Len(t, v, 2)
+		require.Contains(t, v, "foo")
+		require.Equal(t, v["foo"].Type(), js.TypeString)
+		require.Equal(t, v["foo"].String(), "bar")
+		require.Contains(t, v, "baz")
+		require.Equal(t, v["baz"].Type(), js.TypeNumber)
+		require.Equal(t, v["baz"].Float(), float64(42))
+	})
 	t.Run("Object -> struct", func(t *testing.T) {
 		type A struct {
 			Bool   bool
@@ -367,6 +396,30 @@ func TestUnmarshal(t *testing.T) {
 				"string": "Le Big Mac",
 			},
 		)
+	})
+	t.Run("Object -> struct with js.Value", func(t *testing.T) {
+		type A struct {
+			Bool   js.Value
+			Int    js.Value
+			String js.Value
+		}
+
+		v := A{}
+		err := jz.Unmarshal(
+			js.ValueOf(map[string]any{
+				"bool":   true,
+				"int":    42,
+				"string": "Le Big Mac",
+			}),
+			&v,
+		)
+		require.NoError(t, err)
+		require.Equal(t, v.Bool.Type(), js.TypeBoolean)
+		require.Equal(t, v.Bool.Bool(), true)
+		require.Equal(t, v.Int.Type(), js.TypeNumber)
+		require.Equal(t, v.Int.Int(), 42)
+		require.Equal(t, v.String.Type(), js.TypeString)
+		require.Equal(t, v.String.String(), "Le Big Mac")
 	})
 	t.Run("Object -> nested struct", func(t *testing.T) {
 		type A struct {
