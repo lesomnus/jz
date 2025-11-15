@@ -10,6 +10,8 @@ import (
 
 var globalScope = Scope{}
 
+// GlobalScope returns the global Scope instance that can be used to manage
+// JavaScript function lifecycles and wait for their completion.
 func GlobalScope() *Scope {
 	return &globalScope
 }
@@ -32,7 +34,7 @@ func (s *Scope) FuncOf(f func(this js.Value, args []js.Value) any) js.Func {
 }
 
 func (s *Scope) Promise(f func() (any, any)) js.Value {
-	return js.Global().Get("Promise").New(s.FuncOf(func(this js.Value, args []js.Value) any {
+	return js.Global().Get("Promise").New(js.FuncOf(func(this js.Value, args []js.Value) any {
 		resolve := args[0]
 		reject := args[1]
 

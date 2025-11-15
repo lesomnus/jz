@@ -6,12 +6,8 @@ import (
 	"syscall/js"
 )
 
-func Stringify(v any) string {
-	jv, ok := v.(js.Value)
-	if !ok {
-		jv = js.ValueOf(v)
-	}
-
+// Stringify converts a value to its string representation.
+func Stringify(jv js.Value) string {
 	switch jv.Type() {
 	case js.TypeUndefined:
 		return "undefined"
@@ -35,7 +31,7 @@ func Stringify(v any) string {
 			return s
 		}
 
-		return GetX(js.Global(), "JSON", "stringify").Invoke(v).String()
+		return GetX(js.Global(), "JSON", "stringify").Invoke(jv).String()
 	default:
 		return "<unknown>"
 	}

@@ -11,6 +11,8 @@ import (
 	"unicode"
 )
 
+// Unmarshal converts a JavaScript value to a Go value.
+// The target v must be a non-nil pointer. It supports struct tags "js" for field mapping.
 func Unmarshal(data js.Value, v any) error {
 	rv := reflect.ValueOf(v)
 	if rv.Kind() != reflect.Pointer || rv.IsNil() {
