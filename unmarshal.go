@@ -32,7 +32,7 @@ func unmarshal(data js.Value, v reflect.Value) error {
 	t := data.Type()
 	k := v.Kind()
 	invalid_unmarshal_err := func() error {
-		return fmt.Errorf("invalid unmarshal from %q to %q", t.String(), k.String())
+		return fmt.Errorf("invalid unmarshal from %q to %q", t.String(), v.Type().String())
 	}
 
 	switch k {
@@ -164,19 +164,24 @@ func unmarshal(data js.Value, v reflect.Value) error {
 		case reflect.Map:
 			// JS Object -> map[string]any
 			ks := js.Global().Get("Object").Call("keys", data)
-
 			l := ks.Length()
+			if l == 0 {
+				break
+			}
+			if v.IsNil() {
+				v.Set(reflect.MakeMap(v.Type()))
+			}
+
+			dst := reflect.New(v.Type().Elem())
 			for i := range l {
 				k := ks.Index(i).String()
-				var v_ any
 
 				src := data.Get(k)
-				dst := reflect.ValueOf(&v_).Elem()
-				if err := unmarshal(src, dst); err != nil {
+				if err := unmarshal(src, dst.Elem()); err != nil {
 					return fmt.Errorf(".%s: %w", k, err)
 				}
 
-				v.SetMapIndex(reflect.ValueOf(k), dst)
+				v.SetMapIndex(reflect.ValueOf(k), dst.Elem())
 			}
 
 		case reflect.Struct:
@@ -205,18 +210,33 @@ func unmarshal(data js.Value, v reflect.Value) error {
 			}
 
 		case reflect.Array, reflect.Slice:
+			src_typename := ""
+			switch {
+			case data.InstanceOf(js.Global().Get("ArrayBuffer")):
+				src_typename = "ArrayBuffer"
+			case data.InstanceOf(js.Global().Get("Uint8Array")):
+				src_typename = "Uint8Array"
+			case js.Global().Get("Array").Call("isArray", data).Truthy():
+				src_typename = "Array"
+			default:
+				return fmt.Errorf("invalid unmarshal from non-array object to %q", v.Type().String())
+			}
+
 			l := data.Length()
 			if k == reflect.Array {
 				l = min(l, v.Len())
 			} else {
 				v.Set(reflect.MakeSlice(v.Type(), l, l))
 			}
+			if l == 0 {
+				break
+			}
 
-			switch {
-			case data.InstanceOf(js.Global().Get("ArrayBuffer")):
+			switch src_typename {
+			case "ArrayBuffer":
 				data = js.Global().Get("Uint8Array").New(data)
 				fallthrough
-			case data.InstanceOf(js.Global().Get("Uint8Array")):
+			case "Uint8Array":
 				switch v.Type().Elem().Kind() {
 				case reflect.Uint8:
 					// fast path for []byte?
@@ -246,11 +266,18 @@ func unmarshal(data js.Value, v reflect.Value) error {
 					for i := range l {
 						v.Index(i).SetFloat(data.Index(i).Float())
 					}
+
+				case reflect.Interface:
+					for i := range l {
+						v.Index(i).Set(reflect.ValueOf(data.Index(i).Float()))
+					}
+
+				default:
+					// number -> non-number
+					return fmt.Errorf("invalid unmarshal from %q to %q", src_typename, v.Type().String())
 				}
 
-				// TODO: ???
-				fallthrough
-			case js.Global().Get("Array").Call("isArray", data).Truthy():
+			case "Array":
 				for i := range l {
 					src := data.Index(i)
 					dst := v.Index(i)
@@ -260,7 +287,7 @@ func unmarshal(data js.Value, v reflect.Value) error {
 				}
 
 			default:
-				return fmt.Errorf("invalid unmarshal from non-array object to %q", k.String())
+				panic("unreachable")
 			}
 
 		default:

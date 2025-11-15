@@ -262,7 +262,7 @@ func TestUnmarshal(t *testing.T) {
 		DoTest(t, []int{1, 2, 3, 4, 5, 6, 7}, []int{6, 7, 8, 9, 0}, js.ValueOf([]any{1, 2, 3, 4, 5, 6, 7}))
 	})
 	t.Run("Array of numbers -> []number", func(t *testing.T) {
-		jv := js.ValueOf([]any{1, float32(2), 3.14, 4, 5})
+		jv := []any{1, float32(2), 3.14, 4, 5}
 
 		DoTestJ(t, []int{1, 2, 3, 4, 5}, jv)
 		DoTestJ(t, []int8{1, 2, 3, 4, 5}, jv)
@@ -292,7 +292,7 @@ func TestUnmarshal(t *testing.T) {
 		require.ErrorContains(t, err, ".[1]")
 		require.ErrorContains(t, err, fmt.Sprintf("from %q to %q", "string", "int"))
 	})
-	t.Run("Uint8Array -> slice", func(t *testing.T) {
+	t.Run("Uint8Array -> []number", func(t *testing.T) {
 		jv := js.Global().Get("Uint8Array").Call("from", []any{1, 2, 3, 4, 5})
 
 		DoTestJ(t, []byte{1, 2, 3, 4, 5}, jv)
@@ -308,6 +308,13 @@ func TestUnmarshal(t *testing.T) {
 		DoTestJ(t, []uint16{1, 2, 3, 4, 5}, jv)
 		DoTestJ(t, []uint32{1, 2, 3, 4, 5}, jv)
 		DoTestJ(t, []uint64{1, 2, 3, 4, 5}, jv)
+	})
+	t.Run("Uint8Array -> []non-number", func(t *testing.T) {
+		jv := js.Global().Get("Uint8Array").Call("from", []any{1, 2, 3, 4, 5})
+
+		v := []string{}
+		err := jz.Unmarshal(jv, &v)
+		require.ErrorContains(t, err, fmt.Sprintf("from %q to %q", "Uint8Array", "[]string"))
 	})
 	t.Run("Object -> map[string]any", func(t *testing.T) {
 		var v any = map[string]any{
@@ -330,6 +337,17 @@ func TestUnmarshal(t *testing.T) {
 			},
 		)
 	})
+	t.Run("Object of strings -> map[string]string", func(t *testing.T) {
+		jv := map[string]any{"foo": "bar", "baz": "qux"}
+
+		DoTestJ(t, map[string]string{"foo": "bar", "baz": "qux"}, jv)
+	})
+	t.Run("Object of mixed type -> map[string]type", func(t *testing.T) {
+		v := map[string]string{}
+		err := jz.Unmarshal(js.ValueOf(map[string]any{"foo": "bar", "baz": float64(42)}), &v)
+		require.ErrorContains(t, err, ".baz")
+		require.ErrorContains(t, err, fmt.Sprintf("from %q to %q", "number", "string"))
+	})
 	t.Run("Object -> struct", func(t *testing.T) {
 		type A struct {
 			Bool   bool
@@ -347,6 +365,29 @@ func TestUnmarshal(t *testing.T) {
 				"bool":   true,
 				"int":    42,
 				"string": "Le Big Mac",
+			},
+		)
+	})
+	t.Run("Object -> nested struct", func(t *testing.T) {
+		type A struct {
+			Outer  string
+			Nested struct {
+				Inner string
+			}
+		}
+
+		DoTestJ(t,
+			A{
+				Outer: "micro",
+				Nested: struct{ Inner string }{
+					Inner: "mini",
+				},
+			},
+			map[string]any{
+				"outer": "micro",
+				"nested": map[string]any{
+					"inner": "mini",
+				},
 			},
 		)
 	})
@@ -458,11 +499,6 @@ func TestUnmarshal(t *testing.T) {
 		err := jz.Unmarshal(js.ValueOf(42), v)
 		require.ErrorContains(t, err, "non-nil pointer")
 	})
-	t.Run("fail if string -> int", func(t *testing.T) {
-		var v int
-		err := jz.Unmarshal(js.ValueOf("foo"), &v)
-		require.ErrorContains(t, err, `"string" to "int"`)
-	})
 }
 
 func DoTestV[T any](t *testing.T, v T) {
@@ -495,9 +531,9 @@ func DoTestType_[J any, T any](t *testing.T, ok bool) {
 		assert.NoError(t, err)
 	} else {
 		dst_t := reflect.TypeOf(b)
-		dst := dst_t.Kind().String()
+		dst := dst_t.String()
 		if dst_t.Kind() == reflect.Pointer {
-			dst = dst_t.Elem().Kind().String()
+			dst = dst_t.Elem().String()
 		}
 
 		msg := fmt.Sprintf(" to %q", dst)
