@@ -12,7 +12,7 @@ I hope this package becomes obsolete soon when WASI becomes natively supported i
 - **Promise Handling**: Await JavaScript Promises with Go's context support
 - **HTTP Client**: Use `net/http` with `fetch` API through a `FetchTransport`
 - **Stream I/O**: Convert JavaScript ReadableStreams to `io.Reader`
-- **Type Conversion**: Unmarshal JavaScript type to Go.
+- **Type Conversion**: Unmarshal JavaScript types to Go.
 
 ## Installation
 
@@ -121,3 +121,23 @@ window := js.Global()
 fetch := jz.GetX(window, "fetch")
 json := jz.GetX(window, "JSON", "stringify")
 ```
+
+## Testing
+
+For full tests, including `FetchTransport`, you need an HTTP server to target.
+```bash
+$ go run ./internal/httptest
+```
+
+Then run tests with wasm/js.
+The required environment variables are defined at [./scripts/setup.sh](./scripts/setup.sh).
+```bash
+$ source ./scripts/setup.sh
+$ go test
+```
+
+## Related Works
+
+- [gowebapi](https://github.com/gowebapi)
+- [dominikh/go-js-dom](https://github.com/dominikh/go-js-dom)
+- [Nigel2392/jsext](https://github.com/Nigel2392/jsext)
