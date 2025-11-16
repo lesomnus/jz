@@ -99,3 +99,64 @@ func (r *streamReader) Close() error {
 
 	return nil
 }
+
+func NewReadableStream(r io.ReadCloser) js.Value {
+	buff := make([]byte, 1024)
+	view := buff[:0]
+
+	closed := false
+
+	_pull := js.FuncOf(func(this js.Value, args []js.Value) any {
+		ctrl := args[0]
+		req := ctrl.Get("byobRequest")
+		if len(view) == 0 {
+			n, err := r.Read(buff)
+			if closed {
+				return js.Undefined()
+			}
+			if err != nil {
+				if errors.Is(err, io.EOF) {
+					ctrl.Call("close")
+				} else {
+					ctrl.Call("error", NewError(err.Error()))
+				}
+				req.Call("respond", 0)
+				return js.Undefined()
+			}
+
+			view = buff[:n]
+		}
+
+		if !req.Truthy() {
+			ctrl.Call("enqueue", BytesToJs(view))
+			view = view[:0]
+			return js.Undefined()
+		}
+
+		dst := req.Get("view")
+		l := dst.Length()
+		m := len(view)
+		if l < m {
+			dst.Call("set", BytesToJs(view[:l]))
+			req.Call("respond", l)
+			view = view[l:]
+		} else {
+			dst.Call("set", BytesToJs(view))
+			req.Call("respond", m)
+			view = view[:0]
+		}
+		return js.Undefined()
+	})
+	_cancel := js.FuncOf(func(this js.Value, args []js.Value) any {
+		closed = true
+		r.Close()
+		return js.Undefined()
+	})
+
+	opt := map[string]any{
+		"type":   "bytes",
+		"pull":   _pull,
+		"cancel": _cancel,
+	}
+	return js.Global().Get("ReadableStream").New(opt)
+}

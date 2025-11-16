@@ -11,3 +11,7 @@ type RejectedError struct {
 func (e RejectedError) Error() string {
 	return Stringify(e.Value)
 }
+
+func NewError(msg string) js.Value {
+	return js.Global().Get("Error").New(msg)
+}

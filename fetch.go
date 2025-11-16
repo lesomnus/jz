@@ -37,7 +37,8 @@ func (t FetchTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 		opts["headers"] = h
 	}
 	if req.Body != nil {
-		// TODO: readable stream?
+		// Seems that browser does not support stream upload yet.
+		// opts["body"] = NewReadableStream(req.Body)
 		b, err := io.ReadAll(req.Body)
 		if err != nil {
 			return nil, fmt.Errorf("read body: %w", err)

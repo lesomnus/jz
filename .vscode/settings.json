@@ -1,7 +1,11 @@
 {
-	"go.testEnvVars": {
-		"GOOS": "js",
+	"go.toolsEnvVars": {
 		"GOARCH": "wasm",
+		"GOOS": "js"
+	},
+	"go.testEnvVars": {
+		"GOARCH": "wasm",
+		"GOOS": "js",
 		"JZ_TEST_FETCH_TARGET_URL": "http://localhost:7743"
 	},
 	"go.testFlags": [
