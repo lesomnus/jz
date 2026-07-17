@@ -8,6 +8,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"strconv"
 )
 
 func main() {
@@ -19,6 +20,10 @@ func main() {
 	mux.HandleFunc("/header", handleHeader)
 	mux.HandleFunc("/hang", handleHang)
 	mux.HandleFunc("POST /echo", handleEcho)
+	mux.HandleFunc("/set-cookie", handleSetCookie)
+	mux.HandleFunc("/status", handleStatus)
+	mux.HandleFunc("/nobody", handleNoBody)
+	mux.HandleFunc("/drip", handleDrip)
 
 	addr := net.JoinHostPort(*host, fmt.Sprintf("%d", *port))
 	ln, err := net.Listen("tcp", addr)
@@ -69,6 +74,49 @@ func handleHeader(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleHang(w http.ResponseWriter, r *http.Request) {
+	<-r.Context().Done()
+}
+
+// handleSetCookie emits multiple Set-Cookie headers so clients can verify that
+// they are not collapsed into a single value.
+func handleSetCookie(w http.ResponseWriter, r *http.Request) {
+	w.Header().Add("Set-Cookie", "a=1; Path=/")
+	w.Header().Add("Set-Cookie", "b=2; Path=/")
+	w.Header().Set("Content-Type", "text/plain")
+	fmt.Fprint(w, "ok")
+}
+
+// handleStatus responds with the status code given by ?code= (default 200).
+func handleStatus(w http.ResponseWriter, r *http.Request) {
+	code := http.StatusOK
+	if v := r.URL.Query().Get("code"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			code = n
+		}
+	}
+	w.WriteHeader(code)
+	fmt.Fprint(w, http.StatusText(code))
+}
+
+// handleNoBody responds with 204 No Content (no response body).
+func handleNoBody(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// handleDrip flushes response headers and a first chunk, then holds the
+// connection open until the client disconnects. It lets clients exercise
+// cancellation of a streaming response body after the headers have arrived.
+func handleDrip(w http.ResponseWriter, r *http.Request) {
+	fl, ok := w.(http.Flusher)
+	w.Header().Set("Content-Type", "text/plain")
+	w.WriteHeader(http.StatusOK)
+	if ok {
+		fl.Flush()
+	}
+	io.WriteString(w, "hello")
+	if ok {
+		fl.Flush()
+	}
 	<-r.Context().Done()
 }
 

@@ -4,13 +4,13 @@ package jz_test
 
 import (
 	"fmt"
+	"math"
 	"reflect"
 	"syscall/js"
 	"testing"
 
 	"github.com/lesomnus/jz"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
+	"github.com/lesomnus/jz/internal/x"
 )
 
 func TestUnmarshal(t *testing.T) {
@@ -216,8 +216,8 @@ func TestUnmarshal(t *testing.T) {
 		jv := js.ValueOf(js.Global().Get("Object").New())
 		var v js.Value
 		err := jz.Unmarshal(jv, &v)
-		require.NoError(t, err)
-		require.True(t, jv.Equal(v))
+		x.NoError(t, err)
+		x.True(t, jv.Equal(v))
 	})
 	t.Run("bool", func(t *testing.T) {
 		DoTestV[any](t, false)
@@ -296,20 +296,19 @@ func TestUnmarshal(t *testing.T) {
 	t.Run("Array of mixed types -> []type", func(t *testing.T) {
 		v := []int{}
 		err := jz.Unmarshal(js.ValueOf([]any{42, "foo"}), &v)
-		require.ErrorContains(t, err, ".[1]")
-		require.ErrorContains(t, err, fmt.Sprintf("from %q to %q", "string", "int"))
+		x.ErrorContains(t, err, ".[1]")
+		x.ErrorContains(t, err, fmt.Sprintf("from %q to %q", "string", "int"))
 	})
 	t.Run("Array of mixed types -> []js.Value", func(t *testing.T) {
-		x := require.New(t)
 
 		v := []js.Value{}
 		err := jz.Unmarshal(js.ValueOf([]any{42, "foo"}), &v)
-		x.NoError(err)
-		x.Len(v, 2)
-		x.Equal(js.TypeNumber, v[0].Type())
-		x.Equal(42, v[0].Int())
-		x.Equal(js.TypeString, v[1].Type())
-		x.Equal("foo", v[1].String())
+		x.NoError(t, err)
+		x.Len(t, v, 2)
+		x.Equal(t, js.TypeNumber, v[0].Type())
+		x.Equal(t, 42, v[0].Int())
+		x.Equal(t, js.TypeString, v[1].Type())
+		x.Equal(t, "foo", v[1].String())
 	})
 	t.Run("Uint8Array -> []number", func(t *testing.T) {
 		jv := js.Global().Get("Uint8Array").Call("from", []any{1, 2, 3, 4, 5})
@@ -333,7 +332,7 @@ func TestUnmarshal(t *testing.T) {
 
 		v := []string{}
 		err := jz.Unmarshal(jv, &v)
-		require.ErrorContains(t, err, fmt.Sprintf("from %q to %q", "Uint8Array", "[]string"))
+		x.ErrorContains(t, err, fmt.Sprintf("from %q to %q", "Uint8Array", "[]string"))
 	})
 	t.Run("Object -> map[string]any", func(t *testing.T) {
 		var v any = map[string]any{
@@ -364,22 +363,21 @@ func TestUnmarshal(t *testing.T) {
 	t.Run("Object of mixed type -> map[string]type", func(t *testing.T) {
 		v := map[string]string{}
 		err := jz.Unmarshal(js.ValueOf(map[string]any{"foo": "bar", "baz": float64(42)}), &v)
-		require.ErrorContains(t, err, ".baz")
-		require.ErrorContains(t, err, fmt.Sprintf("from %q to %q", "number", "string"))
+		x.ErrorContains(t, err, ".baz")
+		x.ErrorContains(t, err, fmt.Sprintf("from %q to %q", "number", "string"))
 	})
 	t.Run("Object of mixed type -> map[string]js.Value", func(t *testing.T) {
-		x := require.New(t)
 
 		v := map[string]js.Value{}
 		err := jz.Unmarshal(js.ValueOf(map[string]any{"foo": "bar", "baz": float64(42)}), &v)
-		x.NoError(err)
-		x.Len(v, 2)
-		x.Contains(v, "foo")
-		x.Equal(js.TypeString, v["foo"].Type())
-		x.Equal("bar", v["foo"].String())
-		x.Contains(v, "baz")
-		x.Equal(js.TypeNumber, v["baz"].Type())
-		x.Equal(float64(42), v["baz"].Float())
+		x.NoError(t, err)
+		x.Len(t, v, 2)
+		x.Contains(t, v, "foo")
+		x.Equal(t, js.TypeString, v["foo"].Type())
+		x.Equal(t, "bar", v["foo"].String())
+		x.Contains(t, v, "baz")
+		x.Equal(t, js.TypeNumber, v["baz"].Type())
+		x.Equal(t, float64(42), v["baz"].Float())
 	})
 	t.Run("Object -> struct", func(t *testing.T) {
 		type A struct {
@@ -402,7 +400,6 @@ func TestUnmarshal(t *testing.T) {
 		)
 	})
 	t.Run("Object -> struct with js.Value", func(t *testing.T) {
-		x := require.New(t)
 
 		type A struct {
 			Bool   js.Value
@@ -419,13 +416,13 @@ func TestUnmarshal(t *testing.T) {
 			}),
 			&v,
 		)
-		x.NoError(err)
-		x.Equal(js.TypeBoolean, v.Bool.Type())
-		x.Equal(true, v.Bool.Bool())
-		x.Equal(js.TypeNumber, v.Int.Type())
-		x.Equal(42, v.Int.Int())
-		x.Equal(js.TypeString, v.String.Type())
-		x.Equal("Le Big Mac", v.String.String())
+		x.NoError(t, err)
+		x.Equal(t, js.TypeBoolean, v.Bool.Type())
+		x.Equal(t, true, v.Bool.Bool())
+		x.Equal(t, js.TypeNumber, v.Int.Type())
+		x.Equal(t, 42, v.Int.Int())
+		x.Equal(t, js.TypeString, v.String.Type())
+		x.Equal(t, "Le Big Mac", v.String.String())
 	})
 	t.Run("Object -> nested struct", func(t *testing.T) {
 		type A struct {
@@ -551,12 +548,12 @@ func TestUnmarshal(t *testing.T) {
 	t.Run("nil pointer", func(t *testing.T) {
 		var v *int
 		err := jz.Unmarshal(js.ValueOf(42), v)
-		require.ErrorContains(t, err, "non-nil pointer")
+		x.ErrorContains(t, err, "non-nil pointer")
 	})
 	t.Run("non-pointer", func(t *testing.T) {
 		var v int
 		err := jz.Unmarshal(js.ValueOf(42), v)
-		require.ErrorContains(t, err, "non-nil pointer")
+		x.ErrorContains(t, err, "non-nil pointer")
 	})
 }
 
@@ -571,8 +568,8 @@ func DoTestJ[T any, U any](t *testing.T, v T, j U) {
 
 func DoTest[T any, U any](t *testing.T, expected T, actual T, j U) {
 	err := jz.Unmarshal(js.ValueOf(j), &actual)
-	require.NoError(t, err)
-	require.Equal(t, expected, actual)
+	x.NoError(t, err)
+	x.Equal(t, expected, actual)
 }
 
 func DoTestType[J any, T any](t *testing.T, ok bool) {
@@ -587,7 +584,7 @@ func DoTestType_[J any, T any](t *testing.T, ok bool) {
 	j := js.ValueOf(a)
 	err := jz.Unmarshal(j, &b)
 	if ok {
-		assert.NoError(t, err)
+		x.NoError(t, err)
 	} else {
 		dst_t := reflect.TypeOf(b)
 		dst := dst_t.String()
@@ -596,6 +593,66 @@ func DoTestType_[J any, T any](t *testing.T, ok bool) {
 		}
 
 		msg := fmt.Sprintf(" to %q", dst)
-		assert.ErrorContains(t, err, msg)
+		x.ErrorContains(t, err, msg)
 	}
+}
+
+func TestUnmarshalLargeUnsigned(t *testing.T) {
+	t.Run("scalar uint64 above MaxInt64", func(t *testing.T) {
+
+		// 1e19 fits in uint64 (max ~1.84e19) but not in int64 (max ~9.2e18).
+		// The buggy path routed through a signed int and clamped to MaxInt64.
+		src := js.ValueOf(float64(1e19))
+
+		var got uint64
+		x.NoError(t, jz.Unmarshal(src, &got))
+		x.Equal(t, uint64(float64(1e19)), got)
+		x.Greater(t, got, uint64(math.MaxInt64), "value above MaxInt64 must not be clamped")
+	})
+	t.Run("array of large uint64", func(t *testing.T) {
+
+		src := js.ValueOf([]any{float64(1e19)})
+
+		var got []uint64
+		x.NoError(t, jz.Unmarshal(src, &got))
+		x.Len(t, got, 1)
+		x.Equal(t, uint64(float64(1e19)), got[0])
+	})
+}
+
+func TestUnmarshalMapNonStringKey(t *testing.T) {
+
+	src := js.ValueOf(map[string]any{"1": "a"})
+
+	// Must return an error, not panic.
+	var got map[int]string
+	err := jz.Unmarshal(src, &got)
+	x.Error(t, err)
+	x.ErrorContains(t, err, "non-string key")
+}
+
+func TestUnmarshalMapNamedStringKey(t *testing.T) {
+
+	type Key string
+	src := js.ValueOf(map[string]any{"foo": "bar"})
+
+	var got map[Key]string
+	x.NoError(t, jz.Unmarshal(src, &got))
+	x.Equal(t, "bar", got["foo"])
+}
+
+func TestUnmarshalStructFieldErrorNamesField(t *testing.T) {
+
+	type A struct {
+		Foo int
+	}
+	src := js.ValueOf(map[string]any{"foo": "bar"})
+
+	var got A
+	err := jz.Unmarshal(src, &got)
+	x.Error(t, err)
+	// The error must reference the failing field's JS key, not the struct type.
+	x.ErrorContains(t, err, ".foo")
+	x.NotContains(t, err.Error(), ".A")
+	x.ErrorContains(t, err, `from "string" to "int"`)
 }

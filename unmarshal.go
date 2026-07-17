@@ -12,7 +12,8 @@ import (
 )
 
 // Unmarshal converts a JavaScript value to a Go value.
-// The target v must be a non-nil pointer. It supports struct tags "js" for field mapping.
+// The target v must be a non-nil pointer. It supports the "json" struct tag for
+// field mapping (name and the "-" skip option), matching encoding/json.
 func Unmarshal(data js.Value, v any) error {
 	rv := reflect.ValueOf(v)
 	if rv.Kind() != reflect.Pointer || rv.IsNil() {
@@ -76,7 +77,7 @@ func unmarshal(data js.Value, v reflect.Value) error {
 					src := data.Index(i)
 					dst := w.Index(i)
 					if err := unmarshal(src, dst); err != nil {
-						return fmt.Errorf(".%s[%d]: %w", v.Type().Name(), i, err)
+						return fmt.Errorf(".[%d]: %w", i, err)
 					}
 				}
 				v.Set(w)
@@ -95,7 +96,7 @@ func unmarshal(data js.Value, v reflect.Value) error {
 					src := data.Get(k)
 					dst := reflect.ValueOf(&v_).Elem()
 					if err := unmarshal(src, dst); err != nil {
-						return fmt.Errorf(".%s[%d]: %w", k, i, err)
+						return fmt.Errorf(".%s: %w", k, err)
 					}
 
 					w.SetMapIndex(reflect.ValueOf(k), dst)
@@ -129,7 +130,9 @@ func unmarshal(data js.Value, v reflect.Value) error {
 			reflect.Uint32,
 			reflect.Uint64,
 			reflect.Uintptr:
-			v.SetUint(uint64(data.Int()))
+			// Route through Float, not Int: js.Value.Int() narrows via a signed
+			// int first, corrupting unsigned values above math.MaxInt64.
+			v.SetUint(uint64(data.Float()))
 
 		case reflect.Float32,
 			reflect.Float64:
@@ -164,7 +167,12 @@ func unmarshal(data js.Value, v reflect.Value) error {
 	case js.TypeObject:
 		switch k {
 		case reflect.Map:
-			// JS Object -> map[string]any
+			// JS Object -> map[string]T (keys are always strings in JS).
+			kt := v.Type().Key()
+			if kt.Kind() != reflect.String {
+				return fmt.Errorf("cannot unmarshal object into map with non-string key type %q", kt.String())
+			}
+
 			ks := js.Global().Get("Object").Call("keys", data)
 			l := ks.Length()
 			if l == 0 {
@@ -183,7 +191,8 @@ func unmarshal(data js.Value, v reflect.Value) error {
 					return fmt.Errorf(".%s: %w", k, err)
 				}
 
-				v.SetMapIndex(reflect.ValueOf(k), dst.Elem())
+				// Convert so that named string key types (type K string) work.
+				v.SetMapIndex(reflect.ValueOf(k).Convert(kt), dst.Elem())
 			}
 
 		case reflect.Struct:
@@ -207,7 +216,7 @@ func unmarshal(data js.Value, v reflect.Value) error {
 
 				next := data.Get(name)
 				if err := unmarshal(next, f); err != nil {
-					return fmt.Errorf(".%s: %w", vt.Name(), err)
+					return fmt.Errorf(".%s: %w", name, err)
 				}
 			}
 
@@ -260,7 +269,7 @@ func unmarshal(data js.Value, v reflect.Value) error {
 					reflect.Uint32,
 					reflect.Uint64:
 					for i := range l {
-						v.Index(i).SetUint(uint64(data.Index(i).Int()))
+						v.Index(i).SetUint(uint64(data.Index(i).Float()))
 					}
 
 				case reflect.Float32,
@@ -284,7 +293,7 @@ func unmarshal(data js.Value, v reflect.Value) error {
 					src := data.Index(i)
 					dst := v.Index(i)
 					if err := unmarshal(src, dst); err != nil {
-						return fmt.Errorf(".%s[%d]: %w", v.Type().Name(), i, err)
+						return fmt.Errorf(".[%d]: %w", i, err)
 					}
 				}
 

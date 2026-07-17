@@ -26,13 +26,28 @@ func Stringify(jv js.Value) string {
 		}
 		return "[Function]"
 	case js.TypeObject:
-		s := js.Global().Call("String", jv).String()
-		if s != "[object Object]" {
+		// A custom toString or JSON.stringify can throw (circular references,
+		// BigInt, ...); never let that panic escape, since RejectedError.Error
+		// relies on Stringify.
+		if s, ok := tryString(func() js.Value { return js.Global().Call("String", jv) }); ok && s != "[object Object]" {
 			return s
 		}
-
-		return GetX(js.Global(), "JSON", "stringify").Invoke(jv).String()
+		if s, ok := tryString(func() js.Value { return Get(js.Global(), "JSON", "stringify").Invoke(jv) }); ok {
+			return s
+		}
+		return "[object Object]"
 	default:
 		return "<unknown>"
 	}
+}
+
+// tryString evaluates f and returns its value as a string, reporting false if
+// the underlying JavaScript threw (which syscall/js surfaces as a panic).
+func tryString(f func() js.Value) (s string, ok bool) {
+	defer func() {
+		if recover() != nil {
+			s, ok = "", false
+		}
+	}()
+	return f().String(), true
 }

@@ -5,6 +5,7 @@ package jz_test
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"strings"
 	"syscall/js"
@@ -12,7 +13,7 @@ import (
 	"time"
 
 	"github.com/lesomnus/jz"
-	"github.com/stretchr/testify/require"
+	"github.com/lesomnus/jz/internal/x"
 )
 
 func TestNewReader(t *testing.T) {
@@ -78,89 +79,85 @@ func TestNewReader(t *testing.T) {
 	}
 
 	t.Run("read small at once", func(t *testing.T) {
-		x := require.New(t)
 
 		data := []byte("Royale with Cheese")
 		r, err := jz.NewReader(new_readable_stream(t, data))
-		x.NoError(err)
+		x.NoError(t, err)
 
 		buff := make([]byte, len(data)*2)
 		n, err := r.Read(buff)
-		x.NoError(err)
-		x.Equal(len(data), n)
-		x.Equal(data, buff[:n])
+		x.NoError(t, err)
+		x.Equal(t, len(data), n)
+		x.Equal(t, data, buff[:n])
 
 		_, err = r.Read(buff)
-		x.ErrorIs(err, io.EOF)
+		x.ErrorIs(t, err, io.EOF)
 	})
 	t.Run("read small by chunk", func(t *testing.T) {
-		x := require.New(t)
 
 		//              |<---->|<---->|<--+++
 		data := []byte("Royale with Cheese")
 		r, err := jz.NewReader(new_readable_stream(t, data))
-		x.NoError(err)
+		x.NoError(t, err)
 
 		buff := make([]byte, 7)
 		n, err := r.Read(buff)
-		x.NoError(err)
-		x.Equal(7, n)
-		x.Equal("Royale ", string(buff))
+		x.NoError(t, err)
+		x.Equal(t, 7, n)
+		x.Equal(t, "Royale ", string(buff))
 
 		n, err = r.Read(buff)
-		x.NoError(err)
-		x.Equal(7, n)
-		x.Equal("with Ch", string(buff))
+		x.NoError(t, err)
+		x.Equal(t, 7, n)
+		x.Equal(t, "with Ch", string(buff))
 
 		n, err = r.Read(buff)
-		x.NoError(err)
-		x.Equal(4, n)
-		x.Equal("eese", string(buff[:n]))
+		x.NoError(t, err)
+		x.Equal(t, 4, n)
+		x.Equal(t, "eese", string(buff[:n]))
 
 		_, err = r.Read(buff)
-		x.ErrorIs(err, io.EOF)
+		x.ErrorIs(t, err, io.EOF)
 	})
 	t.Run("read fit at once", func(t *testing.T) {
-		x := require.New(t)
 
 		data := []byte(strings.Repeat("abcdefg", (BufSize/7 + 1))[:BufSize])
 		r, err := jz.NewReader(new_readable_stream(t, data))
-		x.NoError(err)
+		x.NoError(t, err)
 
 		buff := make([]byte, len(data)*2)
 		n, err := r.Read(buff)
-		x.NoError(err)
-		x.Equal(len(data), n)
-		x.Equal(data, buff[:n])
+		x.NoError(t, err)
+		x.Equal(t, len(data), n)
+		x.Equal(t, data, buff[:n])
 
 		_, err = r.Read(buff)
-		x.ErrorIs(err, io.EOF)
+		x.ErrorIs(t, err, io.EOF)
 	})
 
 	teat_read_by_chunk := func(t *testing.T, data_size, chunk_size int) {
-		x := require.New(t)
 
 		data := []byte(strings.Repeat("abcdefg", (data_size/7 + 1))[:data_size])
 		r, err := jz.NewReader(new_readable_stream(t, data))
-		x.NoError(err)
+		x.NoError(t, err)
 
 		pos := 0
 		buff := make([]byte, chunk_size)
 		for pos < (data_size - chunk_size) {
 			n, err := r.Read(buff)
-			x.NoError(err)
-			x.Equal(min(chunk_size, BufSize), n)
-			x.Equal(data[pos:pos+n], buff[:n])
+			x.NoError(t, err)
+			x.Equal(t, min(chunk_size, BufSize), n)
+			x.Equal(t, data[pos:pos+n], buff[:n])
 			pos += n
 		}
 
 		n, err := r.Read(buff)
-		x.NoError(err)
-		x.Equal(data_size-pos, n)
-		x.Equal(data[pos:], buff[:n])
+		x.NoError(t, err)
+		x.Equal(t, data_size-pos, n)
+		x.Equal(t, data[pos:], buff[:n])
 
 		_, err = r.Read(buff)
-		x.ErrorIs(err, io.EOF)
+		x.ErrorIs(t, err, io.EOF)
 	}
 	t.Run("read fit by chunk", func(t *testing.T) {
 		teat_read_by_chunk(t, BufSize, 13)
@@ -176,51 +173,48 @@ func TestNewReader(t *testing.T) {
 	})
 
 	t.Run("read by io.ReadFull", func(t *testing.T) {
-		x := require.New(t)
 
 		const data_size = 5000
 		const chunk_size = BufSize + 23
 
 		data := strings.Repeat("abcdefg", (data_size/7 + 1))[:data_size]
 		r, err := jz.NewReader(new_readable_stream(t, []byte(data)))
-		x.NoError(err)
+		x.NoError(t, err)
 
 		pos := 0
 		buff := make([]byte, chunk_size)
 		for pos < (data_size - chunk_size) {
 			n, err := io.ReadFull(r, buff)
-			x.NoError(err)
-			x.Equal(chunk_size, n)
-			x.Equal(data[pos:pos+n], string(buff[:n]))
+			x.NoError(t, err)
+			x.Equal(t, chunk_size, n)
+			x.Equal(t, data[pos:pos+n], string(buff[:n]))
 			pos += n
 		}
 
 		n, err := io.ReadFull(r, buff)
-		x.ErrorIs(err, io.ErrUnexpectedEOF)
-		x.Equal(data_size-pos, n)
-		x.Equal(data[pos:], string(buff[:n]))
+		x.ErrorIs(t, err, io.ErrUnexpectedEOF)
+		x.Equal(t, data_size-pos, n)
+		x.Equal(t, data[pos:], string(buff[:n]))
 
 		_, err = r.Read(buff)
-		x.ErrorIs(err, io.EOF)
+		x.ErrorIs(t, err, io.EOF)
 	})
 	t.Run("read by io.ReadAll", func(t *testing.T) {
-		x := require.New(t)
 
 		const data_size = 5000
 
 		data := strings.Repeat("abcdefg", (data_size/7 + 1))[:data_size]
 		r, err := jz.NewReader(new_readable_stream(t, []byte(data)))
-		x.NoError(err)
+		x.NoError(t, err)
 
 		buff, err := io.ReadAll(r)
-		x.NoError(err)
-		x.Equal(data, string(buff))
+		x.NoError(t, err)
+		x.Equal(t, data, string(buff))
 	})
 	t.Run("close", func(t *testing.T) {
-		x := require.New(t)
 
 		r, err := jz.NewReader(new_hang_stream(t))
-		x.NoError(err)
+		x.NoError(t, err)
 
 		t0 := time.Now()
 		go func() {
@@ -230,10 +224,10 @@ func TestNewReader(t *testing.T) {
 
 		buff := make([]byte, 42)
 		_, err = r.Read(buff)
-		x.ErrorIs(err, io.ErrClosedPipe)
+		x.ErrorIs(t, err, io.ErrClosedPipe)
 
 		t1 := time.Now()
-		x.WithinRange(t1, t0, t0.Add(50*time.Millisecond))
+		x.WithinRange(t, t1, t0, t0.Add(50*time.Millisecond))
 	})
 }
 
@@ -246,30 +240,28 @@ func TestNewReadableStream(t *testing.T) {
 	}
 	read := func(t *testing.T, r js.Value, buff js.Value) (js.Value, js.Value, bool, error) {
 		res, err := jz.AwaitContext(t.Context(), r.Call("read", js.Global().Get("Uint8Array").New(buff)))
-		require.NoError(t, err)
+		x.NoError(t, err)
 
 		v := res.Get("value")
 		return v.Get("buffer"), v, res.Get("done").Bool(), nil
 	}
 
 	t.Run("read small at once", func(t *testing.T) {
-		x := require.New(t)
 
 		data := []byte("Royale with Cheese")
 		r := get_reader(data)
 
 		buff := js.Global().Get("ArrayBuffer").New(len(data) * 2)
 		buff, v, done, err := read(t, r, buff)
-		x.NoError(err)
-		x.False(done)
-		x.Equal([]byte(data), jz.BytesToGo(v))
+		x.NoError(t, err)
+		x.False(t, done)
+		x.Equal(t, []byte(data), jz.BytesToGo(v))
 
 		_, _, done, err = read(t, r, buff)
-		x.NoError(err)
-		x.True(done)
+		x.NoError(t, err)
+		x.True(t, done)
 	})
 	t.Run("read small by chunk", func(t *testing.T) {
-		x := require.New(t)
 
 		//              |<---->|<---->|<--+++
 		data := []byte("Royale with Cheese")
@@ -277,47 +269,45 @@ func TestNewReadableStream(t *testing.T) {
 
 		buff := js.Global().Get("ArrayBuffer").New(7)
 		buff, v, done, err := read(t, r, buff)
-		x.NoError(err)
-		x.False(done)
-		x.Equal(7, v.Length())
-		x.Equal("Royale ", string(jz.BytesToGo(v)))
+		x.NoError(t, err)
+		x.False(t, done)
+		x.Equal(t, 7, v.Length())
+		x.Equal(t, "Royale ", string(jz.BytesToGo(v)))
 
 		buff, v, done, err = read(t, r, buff)
-		x.NoError(err)
-		x.False(done)
-		x.Equal(7, v.Length())
-		x.Equal("with Ch", string(jz.BytesToGo(v)))
+		x.NoError(t, err)
+		x.False(t, done)
+		x.Equal(t, 7, v.Length())
+		x.Equal(t, "with Ch", string(jz.BytesToGo(v)))
 
 		buff, v, done, err = read(t, r, buff)
-		x.NoError(err)
-		x.False(done)
-		x.Equal(4, v.Length())
-		x.Equal("eese", string(jz.BytesToGo(v)))
+		x.NoError(t, err)
+		x.False(t, done)
+		x.Equal(t, 4, v.Length())
+		x.Equal(t, "eese", string(jz.BytesToGo(v)))
 
 		_, _, done, err = read(t, r, buff)
-		x.NoError(err)
-		x.True(done)
+		x.NoError(t, err)
+		x.True(t, done)
 	})
 	t.Run("read fit at once", func(t *testing.T) {
-		x := require.New(t)
 
 		data := []byte(strings.Repeat("abcdefg", (BufSize/7 + 1))[:BufSize])
 		r := get_reader(data)
 
 		buff := js.Global().Get("ArrayBuffer").New(BufSize * 2)
 		buff, v, done, err := read(t, r, buff)
-		x.NoError(err)
-		x.False(done)
-		x.Equal(len(data), v.Length())
-		x.Equal(data, jz.BytesToGo(v))
+		x.NoError(t, err)
+		x.False(t, done)
+		x.Equal(t, len(data), v.Length())
+		x.Equal(t, data, jz.BytesToGo(v))
 
 		_, _, done, err = read(t, r, buff)
-		x.NoError(err)
-		x.True(done)
+		x.NoError(t, err)
+		x.True(t, done)
 	})
 
 	teat_read_by_chunk := func(t *testing.T, data_size, chunk_size int) {
-		x := require.New(t)
 
 		data := []byte(strings.Repeat("abcdefg", (data_size/7 + 1))[:data_size])
 		r := get_reader(data)
@@ -330,10 +320,10 @@ func TestNewReadableStream(t *testing.T) {
 
 			buff_, v, done, err := read(t, r, buff)
 			n := v.Length()
-			x.NoError(err)
-			x.False(done)
-			x.Equal(expected_read_bytes, n)
-			x.Equal(data[pos:pos+n], jz.BytesToGo(v))
+			x.NoError(t, err)
+			x.False(t, done)
+			x.Equal(t, expected_read_bytes, n)
+			x.Equal(t, data[pos:pos+n], jz.BytesToGo(v))
 
 			pos += n
 			buff = buff_
@@ -348,10 +338,10 @@ func TestNewReadableStream(t *testing.T) {
 
 			buff_, v, done, err := read(t, r, buff)
 			n := v.Length()
-			x.NoError(err)
-			x.False(done)
-			x.Equal(expected_read_bytes, n)
-			x.Equal(data[pos:pos+expected_read_bytes], jz.BytesToGo(v))
+			x.NoError(t, err)
+			x.False(t, done)
+			x.Equal(t, expected_read_bytes, n)
+			x.Equal(t, data[pos:pos+expected_read_bytes], jz.BytesToGo(v))
 
 			pos += n
 			buff = buff_
@@ -359,18 +349,18 @@ func TestNewReadableStream(t *testing.T) {
 		if pos < data_size {
 			buff_, v, done, err := read(t, r, buff)
 			n := v.Length()
-			x.NoError(err)
-			x.False(done)
-			x.Equal(data_size-pos, n)
-			x.Equal(data[pos:], jz.BytesToGo(v))
+			x.NoError(t, err)
+			x.False(t, done)
+			x.Equal(t, data_size-pos, n)
+			x.Equal(t, data[pos:], jz.BytesToGo(v))
 
 			pos += n
 			buff = buff_
 		}
 
 		_, _, done, err := read(t, r, buff)
-		x.NoError(err)
-		x.True(done)
+		x.NoError(t, err)
+		x.True(t, done)
 	}
 	t.Run("read fit by chunk", func(t *testing.T) {
 		teat_read_by_chunk(t, BufSize, 13)
@@ -385,7 +375,6 @@ func TestNewReadableStream(t *testing.T) {
 		teat_read_by_chunk(t, 5000, BufSize+23)
 	})
 	t.Run("cancel", func(t *testing.T) {
-		x := require.New(t)
 
 		ctx, cancel := context.WithTimeout(t.Context(), time.Second)
 		defer cancel()
@@ -401,11 +390,11 @@ func TestNewReadableStream(t *testing.T) {
 
 		buff := js.Global().Get("ArrayBuffer").New(BufSize)
 		res, err := jz.AwaitContext(t.Context(), r.Call("read", js.Global().Get("Uint8Array").New(buff)))
-		x.NoError(err)
-		x.True(res.Get("done").Bool())
+		x.NoError(t, err)
+		x.True(t, res.Get("done").Bool())
 
 		t1 := time.Now()
-		x.WithinRange(t1, t0, t0.Add(50*time.Millisecond))
+		x.WithinRange(t, t1, t0, t0.Add(50*time.Millisecond))
 	})
 }
 
@@ -422,4 +411,158 @@ func (r hangReader) Read(p []byte) (int, error) {
 func (r hangReader) Close() error {
 	r.cancel()
 	return nil
+}
+
+// readCloser adapts a Read func into an io.ReadCloser.
+type funcReadCloser struct {
+	read  func(p []byte) (int, error)
+	close func() error
+}
+
+func (r funcReadCloser) Read(p []byte) (int, error) { return r.read(p) }
+func (r funcReadCloser) Close() error {
+	if r.close != nil {
+		return r.close()
+	}
+	return nil
+}
+
+// jsStream wraps data into a JS ReadableStream via the package under test.
+func jsStream(data []byte) js.Value {
+	return jz.NewReadableStream(io.NopCloser(bytes.NewReader(data)))
+}
+
+func TestStreamReaderClose(t *testing.T) {
+	t.Run("idempotent", func(t *testing.T) {
+		r, err := jz.NewReader(jsStream([]byte("abc")))
+		x.NoError(t, err)
+		x.NoError(t, r.Close())
+		x.NoError(t, r.Close())
+	})
+	t.Run("read after close", func(t *testing.T) {
+		r, err := jz.NewReader(jsStream([]byte("abc")))
+		x.NoError(t, err)
+		x.NoError(t, r.Close())
+
+		_, err = r.Read(make([]byte, 4))
+		x.ErrorIs(t, err, io.ErrClosedPipe)
+	})
+	t.Run("zero-length read", func(t *testing.T) {
+		r, err := jz.NewReader(jsStream([]byte("abc")))
+		x.NoError(t, err)
+		defer r.Close()
+
+		n, err := r.Read(nil)
+		x.NoError(t, err)
+		x.Equal(t, 0, n)
+	})
+	t.Run("double read at EOF", func(t *testing.T) {
+		r, err := jz.NewReader(jsStream([]byte("abc")))
+		x.NoError(t, err)
+		defer r.Close()
+
+		got, err := io.ReadAll(r)
+		x.NoError(t, err)
+		x.Equal(t, "abc", string(got))
+
+		_, err = r.Read(make([]byte, 4))
+		x.ErrorIs(t, err, io.EOF)
+		_, err = r.Read(make([]byte, 4))
+		x.ErrorIs(t, err, io.EOF)
+	})
+}
+
+func TestNewReadableStreamBytesWithEOF(t *testing.T) {
+	// A reader whose final Read returns (n>0, io.EOF) in one call must not lose
+	// its trailing bytes.
+
+	data := []byte("Royale with Cheese tail")
+	done := false
+	src := funcReadCloser{read: func(p []byte) (int, error) {
+		if done {
+			return 0, io.EOF
+		}
+		done = true
+		n := copy(p, data)
+		return n, io.EOF
+	}}
+
+	r, err := jz.NewReader(jz.NewReadableStream(src))
+	x.NoError(t, err)
+	defer r.Close()
+
+	got, err := io.ReadAll(r)
+	x.NoError(t, err)
+	x.Equal(t, data, got)
+}
+
+func TestNewReadableStreamSpuriousEmptyRead(t *testing.T) {
+	// A (0, nil) read must not enqueue an empty chunk / respond(0) (both throw);
+	// the stream should just pull again and still deliver the data.
+
+	data := []byte("payload")
+	calls := 0
+	src := funcReadCloser{read: func(p []byte) (int, error) {
+		calls++
+		switch calls {
+		case 1:
+			return 0, nil
+		case 2:
+			return copy(p, data), io.EOF
+		default:
+			return 0, io.EOF
+		}
+	}}
+
+	r, err := jz.NewReader(jz.NewReadableStream(src))
+	x.NoError(t, err)
+	defer r.Close()
+
+	got, err := io.ReadAll(r)
+	x.NoError(t, err)
+	x.Equal(t, data, got)
+}
+
+func TestNewReadableStreamErrorPropagation(t *testing.T) {
+	// A non-EOF error must surface to the consumer as a stream error, after the
+	// bytes read before it, and must not panic (the old code called respond(0)
+	// on an invalidated byob request).
+
+	calls := 0
+	src := funcReadCloser{read: func(p []byte) (int, error) {
+		calls++
+		if calls == 1 {
+			return copy(p, []byte("data")), nil
+		}
+		return 0, errors.New("boom")
+	}}
+
+	r, err := jz.NewReader(jz.NewReadableStream(src))
+	x.NoError(t, err)
+	defer r.Close()
+
+	got, err := io.ReadAll(r)
+	x.Error(t, err)
+	x.Contains(t, err.Error(), "boom")
+	x.Equal(t, "data", string(got))
+}
+
+func TestNewReadableStreamDefaultReader(t *testing.T) {
+	// The default (non-byob) reader path uses enqueue; previously untested and
+	// prone to throwing on the terminal respond(0).
+
+	data := []byte("default reader path")
+	s := jsStream(data)
+	reader := s.Call("getReader") // default reader, no byob mode
+
+	var got []byte
+	for {
+		res, err := jz.AwaitContext(t.Context(), reader.Call("read"))
+		x.NoError(t, err)
+		if res.Get("done").Bool() {
+			break
+		}
+		got = append(got, jz.BytesToGo(res.Get("value"))...)
+	}
+	x.Equal(t, data, got)
 }

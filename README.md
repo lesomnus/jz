@@ -118,8 +118,13 @@ str := jz.Stringify(jsValue)
 
 // Access nested properties like optional chaining.
 window := js.Global()
-fetch := jz.GetX(window, "fetch")
-json := jz.GetX(window, "JSON", "stringify")
+fetch := jz.Get(window, "fetch")
+json := jz.Get(window, "JSON", "stringify")
+
+// Use Lookup when you need to know whether the whole path existed.
+if subtle, ok := jz.Lookup(window, "crypto", "subtle"); ok {
+	_ = subtle
+}
 ```
 
 ## Testing
